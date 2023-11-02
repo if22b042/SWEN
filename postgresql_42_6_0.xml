@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="postgresql-42.6.0">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/Downloads/postgresql-42.6.0.jar!/" />
+      <root url="jar://$USER_HOME$/Documents/json-20231013.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
