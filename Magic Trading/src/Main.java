@@ -36,7 +36,7 @@ public class Main {
             System.out.println(decision);
 
             if (decision.equals("1")){
-                success=Login();
+
                 if (success){
                     break;
                 }
@@ -52,17 +52,13 @@ public class Main {
         }
         System.out.println("Access was Successful");
     }
-    static boolean Login(){
+    static boolean Login(String username, String password){
             Connection conn = null;
             PreparedStatement stmt = null;
             ResultSet rs = null;
 
             try {
-                System.out.println("Enter your Username: ");
-                Scanner myObj = new Scanner(System.in);
-                String username = myObj.nextLine();
-                System.out.println("Enter your Password: ");
-                String password = myObj.nextLine();
+
 
                 conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
                 String sql = "SELECT * FROM \"users\" WHERE username = ? AND password = ?";
@@ -95,6 +91,7 @@ public class Main {
 
     static boolean Registration(String username, String password){
         try {
+            System.out.println(username +"   "+ password);
             conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
             String sql = "INSERT INTO \"users\" (username, password) VALUES (?, ?)";
             stmt = conn.prepareStatement(sql);

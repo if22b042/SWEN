@@ -7,7 +7,7 @@ import java.net.InetSocketAddress;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-
+import org.json.JSONObject;
 public class MyHttpServer {
 
     public static void startServer() throws IOException {
@@ -15,14 +15,14 @@ public class MyHttpServer {
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/users", new UsersHandler());
+        server.createContext("/sessions", new LoginHandler());
         server.createContext("/", new RootHandler());
         server.setExecutor(null); // Use default executor
         server.start();
 
         System.out.println("Server started on port " + port);
     }
-
-    static class UsersHandler implements HttpHandler {
+    static class LoginHandler implements HttpHandler{
         @Override
         public void handle(HttpExchange exchange) throws IOException {
 
@@ -30,20 +30,53 @@ public class MyHttpServer {
 
                 InputStreamReader isr = new InputStreamReader(exchange.getRequestBody(), "utf-8");
                 BufferedReader br = new BufferedReader(isr);
-                String requestBody = br.readLine();
 
-                String[] parts = requestBody.split("&");
-                String username = parts[0].split("=")[1];
-                String password = parts[1].split("=")[1];
+
+
+                String requestBody = br.readLine();
+                JSONObject json = new JSONObject(requestBody);
+
+                String username = json.getString("Username");
+                String password = json.getString("Password");
+
+                boolean LoginSucess = Main.Login(username, password);
+
+                String response = LoginSucess ? "User Logged in successfully!" : "Error registering user.";
+                exchange.sendResponseHeaders(200, response.getBytes().length);
+                OutputStream as = exchange.getResponseBody();
+                as.write(response.getBytes());
+                as.close();
+            }
+        }
+    }
+    static class UsersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+
+
+
+                InputStreamReader isr = new InputStreamReader(exchange.getRequestBody(), "utf-8");
+                BufferedReader br = new BufferedReader(isr);
+
+
+
+                String requestBody = br.readLine();
+                JSONObject json = new JSONObject(requestBody);
+
+                String username = json.getString("Username");
+                String password = json.getString("Password");
+
 
                 boolean registrationSuccess = Main.Registration(username, password);
 
                 String response = registrationSuccess ? "User registered successfully!" : "Error registering user.";
 
                 exchange.sendResponseHeaders(200, response.getBytes().length);
-                OutputStream os = exchange.getResponseBody();
-                os.write(response.getBytes());
-                os.close();
+                OutputStream as = exchange.getResponseBody();
+                as.write(response.getBytes());
+                as.close();
             }
         }
 
