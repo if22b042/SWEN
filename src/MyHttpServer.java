@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -23,52 +24,89 @@ public class MyHttpServer {
         int port = 10001    ; // Define the port for your server
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.createContext("/users", new UsersHandler());
+
+        server.createContext("/users", (HttpHandler) new RegistrationHandler());
         server.createContext("/sessions", new LoginHandler());
         server.createContext("/packages", new PackageHandler());
         server.createContext("/transactions/packages", new openPackages());
         server.createContext("/cards", new SeeCards());
         server.createContext("/deck", new Decks());
         server.createContext("/battle", new Battle());
+        server.createContext("/stats", new Stats());
+        server.createContext("/scoreboard", new Scoreboard());
         server.createContext("/", new RootHandler());
         server.setExecutor(null); // Use default executor
         server.start();
 
         System.out.println("Server started on port " + port);
     }
+    static class Stats implements HttpHandler{
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            System.out.println("Stats been envoked");
 
+            String username = GetUsername(exchange);
+            String response = Main.GetStats(username);
+            exchange.sendResponseHeaders(200, response.getBytes().length);
+
+            // Write the response
+            OutputStream os = exchange.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+        }
+    }
+
+    static class Scoreboard implements HttpHandler{
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            List<String> topPlayers = Main.Scoreboard();
+            String response = String.join("\n", topPlayers);
+
+            exchange.sendResponseHeaders(200, response.getBytes(StandardCharsets.UTF_8).length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(response.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
+        }
 
 
     static class Battle implements HttpHandler {
+
+
         @Override
         public void handle(HttpExchange exchange) throws IOException {
 
-                String waitingPlayer=Main.Waitingplayercheck();
-
                 String username = GetUsername(exchange);
 
+            String waitingPlayer = BattleHandler.Waitingplayercheck();
                 // Check if there is another player waiting
                 if (waitingPlayer!="") {
-                    String response = "Game has started";
-                    exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, response.length());
-                    try (OutputStream os = exchange.getResponseBody()) {
-                        os.write(response.getBytes());
-                    }
+
+
                     // Proceed with the battle between 'username' and 'opponent'
-                    BattleData playerData = Main.PrepareBattle(username);
-                    BattleData opponentData = Main.PrepareBattle(waitingPlayer);
+                    BattleData playerData = BattleHandler.PrepareBattle(username);
+                    BattleData opponentData = BattleHandler.PrepareBattle(waitingPlayer);
 
-                    String Battle=Main.Battle(playerData,opponentData);
-                    exchange.sendResponseHeaders(200, Battle.getBytes().length);
+                    String battle = BattleHandler.Battle(playerData, opponentData);
+                    System.out.println(battle);
 
-                    // Write the response
-                    OutputStream os = exchange.getResponseBody();
-                    os.write(Battle.getBytes());
-                    os.close();
+                    try {
+                        exchange.getResponseHeaders().add("Content-Type", "text/plain"); // Set Content-Type if needed
+                        exchange.sendResponseHeaders(200, battle.getBytes(StandardCharsets.UTF_8).length);
+
+                        try (OutputStream os = exchange.getResponseBody()) {
+                            os.write(battle.getBytes(StandardCharsets.UTF_8));
+                            os.flush(); // Explicitly flush the stream
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace(); // Log the exception
+                        // Handle exception (e.g., send a 500 Internal Server Error response)
+                    }
 
                 } else {
                     // No opponent available, add player to the waiting list
-                    Main.addWaitingPlayer(username);
+                    BattleHandler.addWaitingPlayer(username);
                     // Send response to player to wait
                     String response = "Waiting for an opponent...";
                     exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, response.length());
@@ -77,6 +115,7 @@ public class MyHttpServer {
                     }
                 }
             }
+
 
     }
 
@@ -148,16 +187,16 @@ public class MyHttpServer {
         }
     }
     static class openPackages implements HttpHandler{
-
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
 
             String Username=GetUsername(exchange);
+            boolean success= Packages.openPackages(Username);
+            String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
 
 
             String response ="";
-        boolean success=Main.openPackages(Username);
+
         if (success){
             response="Package Opened Sucessfully";
         }
@@ -199,7 +238,7 @@ public class MyHttpServer {
 
                     String requestBody = br.readLine();
                 JSONArray packagesArray = new JSONArray(requestBody);
-                    boolean success= Main.PackageCreator(requestBody);
+                    boolean success= Packages.PackageCreator(requestBody);
 
                     String response ="";
                     if (success){
@@ -265,39 +304,7 @@ public class MyHttpServer {
             }
         }
     }
-    static class UsersHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
 
-            if ("POST".equals(exchange.getRequestMethod())) {
-
-
-
-                InputStreamReader isr = new InputStreamReader(exchange.getRequestBody(), "utf-8");
-                BufferedReader br = new BufferedReader(isr);
-
-
-
-                String requestBody = br.readLine();
-                JSONObject json = new JSONObject(requestBody);
-
-                String username = json.getString("Username");
-                String password = json.getString("Password");
-
-
-                boolean registrationSuccess = Main.Registration(username, password);
-
-                String response = registrationSuccess ? "User registered successfully!" : "Error registering user.";
-
-                exchange.sendResponseHeaders(200, response.getBytes().length);
-                OutputStream as = exchange.getResponseBody();
-                as.write(response.getBytes());
-                as.close();
-            }
-        }
-
-
-    }
     static class RootHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {

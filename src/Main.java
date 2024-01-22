@@ -31,10 +31,12 @@ class BattleData {
     int[] type;
     int[] monster;
     int[] damage;
+    int elo;
     JSONArray activeDeck;
 
-    public BattleData(String name, int[] element, int[] type, int[] monster, int[] damage, JSONArray activeDeck) {
+    public BattleData(String name, int elo, int[] element, int[] type, int[] monster, int[] damage, JSONArray activeDeck) {
         this.name= name;
+        this.elo=elo;
         this.element = element;
         this.type = type;
         this.monster = monster;
@@ -70,7 +72,7 @@ public class Main {
                 }
             }
             if (decision.equals("2")){
-                success=Registration("a","b");
+                success=RegistrationHandler.Registration("a","b");
                 if (success){
                     break;
                 }
@@ -79,6 +81,74 @@ public class Main {
 
         }
         System.out.println("Access was Successful");
+    }
+    public static String GetStats(String username) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
+            String sql = "SELECT coins, elo FROM users WHERE username= ?";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, username);
+            rs = stmt.executeQuery();
+            int elo=0;
+            int coins=0;
+
+            System.out.println("Get Stats");
+            if (rs.next()) {
+                elo = rs.getInt("elo");
+                coins= rs.getInt("coins");
+            }
+            return "Username: "+ username + "  elo: "+ elo+"  coins: "+ coins;
+
+
+        } catch (SQLException e) {
+            e.printStackTrace(); // Log the exception
+        } finally {
+            // Close resources
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException ex) {
+                ex.printStackTrace(); // Log the exception
+            }
+        }
+        return "failure";
+    }
+    public static List<String> Scoreboard() {
+        List<String> topPlayers = new ArrayList<>();
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
+            String sql = "SELECT username, elo FROM users ORDER BY elo DESC LIMIT 10";
+
+            stmt = conn.prepareStatement(sql);
+            rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                String username = rs.getString("username");
+                int elo = rs.getInt("elo");
+                topPlayers.add(username + ": " + elo);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace(); // Log the exception
+        } finally {
+            // Close resources
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException ex) {
+                ex.printStackTrace(); // Log the exception
+            }
+        }
+        return topPlayers;
     }
     static boolean Login(String username, String password){
             Connection conn = null;
@@ -117,355 +187,8 @@ public class Main {
         }
 
 
-    static String Battle (BattleData user1, BattleData user2){
-        Connection conn = null;
-        Statement stmt = null;
 
 
-
-        StringBuilder response = new StringBuilder();
-        int round = 0;
-        String result = null;
-        clearWaitingPlayers();
-        int user1wins=0;
-        int user2wins=0;
-
-        int draws=0;
-        while (round < 100){
-            if (user2.activeDeck.length()<1){
-                System.out.println("user1 won");
-                response.append("\n The game has finished and ").append(user1.name).append(" Has won.\n The final score was: ").append(user1wins).append(" - ").append(user2wins);
-                break;
-            }
-            else if (user1.activeDeck.length()<1){
-                System.out.println("user2 won");
-                response.append("\n The game has finished and ").append(user2.name).append(" Has won.\n The final score was:   ").append(user1wins).append(" - ").append(user2wins);
-                break;
-            }
-
-            int rand1 = (int) Math.floor(Math.random() * user1.activeDeck.length()); // Random index from user1's deck
-            int rand2 = (int) Math.floor(Math.random() * user2.activeDeck.length()); // Random index from user2's deck
-
-
-            // Assuming activeDeck is a JSONArray, you would retrieve the card ID like so:
-            String user1CardId = user1.activeDeck.getString(rand1);
-            String user2CardId = user2.activeDeck.getString(rand2);
-            System.out.println("Till here 1 "+user1.activeDeck.length()+"     "+ user2.activeDeck.length());
-            if(user1.type[rand1] == 0 && user1.type[rand1] == user2.type[rand2]) { // Pure monster fight
-                if (user1.damage[rand1] > user2.damage[rand2]){
-                    response.append(user1.name).append(" has won the ").append(round).append(". round in a Pure monster fight.\n");
-                    // Transfer card from user2 to user1
-                    user1.activeDeck.put(user2CardId);
-                    user2.activeDeck.remove(rand2);
-                    user1wins++;
-                }
-                else if (user1.damage[rand1] < user2.damage[rand2]){
-                    response.append(user2.name).append(" has won the ").append(round).append(". round in a Pure monster fight.\n");
-                    // Transfer card from user1 to user2
-                    user2.activeDeck.put(user1CardId);
-                    user1.activeDeck.remove(rand1);
-                    user2wins++;
-                }
-                else {
-                    response.append("The ").append(round).append(". round ended in a draw.\n");
-                    draws++;
-                }
-            }
-            else if(user1.type[rand1]==1&&user1.type[rand1]==user2.type[rand2]) {//Pure spell fight
-                    if (user1.element[rand1]==1 && user2.element[rand2]==2){//User 1 Water vs User 2 Fire
-                        user1.damage[rand1]= user1.damage[rand1]*2;
-                        user2.damage[rand2]= user2.damage[rand2]/2;
-                    }
-                    else if (user1.element[rand1]==2 && user2.element[rand2]==1){//User 1 Fire vs User 2 Water
-                        user1.damage[rand1]= user1.damage[rand1]/2;
-                        user2.damage[rand2]= user2.damage[rand2]*2;
-                    }
-                    else if (user1.element[rand1]==0 && user2.element[rand2]==1){//User 1 normal vs User 2 Water
-                        user1.damage[rand1]= user1.damage[rand1]*2;
-                        user2.damage[rand2]= user2.damage[rand2]/2;
-                    }
-                    else if (user1.element[rand1]==1 && user2.element[rand2]==0){//User 1 Water vs User 2 normal
-                        user1.damage[rand1]= user1.damage[rand1]/2;
-                        user2.damage[rand2]= user2.damage[rand2]*2;
-                    }
-                    else if (user1.element[rand1]==2 && user2.element[rand2]==0){//User 1 Fire vs User 2 normal
-                        user1.damage[rand1]= user1.damage[rand1]*2;
-                        user2.damage[rand2]= user2.damage[rand2]/2;
-                    }
-                    else if (user1.element[rand1]==0 && user2.element[rand2]==2){//User 1 normal vs User 2 Fire
-                        user1.damage[rand1]= user1.damage[rand1]/2;
-                        user2.damage[rand2]= user2.damage[rand2]*2;
-                    }
-
-
-                    //Normal battle logic who was highest damage
-
-
-                if (user1.damage[rand1] > user2.damage[rand2]){
-                    response.append(user1.name).append(" has won the ").append(round).append(". round in a Pure Spell fight.\n");
-                    // Transfer card from user2 to user1
-                    user1.activeDeck.put(user2CardId);
-                    user2.activeDeck.remove(rand2);
-                    user1wins++;
-                }
-                else if (user1.damage[rand1] < user2.damage[rand2]){
-                    response.append(user2.name).append(" has won the ").append(round).append(". round in a Pure Spell fight.\n");
-                    // Transfer card from user1 to user2
-                    user2.activeDeck.put(user1CardId);
-                    user1.activeDeck.remove(rand1);
-                    user2wins++;
-                }
-                else {
-                    response.append("The ").append(round).append(". round ended in a draw.\n");
-                    draws++;
-                }
-            }
-            else {//Mixed fight if not anything more info is found then should be put together with just spell fight
-                if (user1.element[rand1]==1 && user2.element[rand2]==2){//User 1 Water vs User 2 Fire
-                    user1.damage[rand1]= user1.damage[rand1]*2;
-                    user2.damage[rand2]= user2.damage[rand2]/2;
-                }
-                else if (user1.element[rand1]==2 && user2.element[rand2]==1){//User 1 Fire vs User 2 Water
-                    user1.damage[rand1]= user1.damage[rand1]/2;
-                    user2.damage[rand2]= user2.damage[rand2]*2;
-                }
-                else if (user1.element[rand1]==0 && user2.element[rand2]==1){//User 1 normal vs User 2 Water
-                    user1.damage[rand1]= user1.damage[rand1]*2;
-                    user2.damage[rand2]= user2.damage[rand2]/2;
-                }
-                else if (user1.element[rand1]==1 && user2.element[rand2]==0){//User 1 Water vs User 2 normal
-                    user1.damage[rand1]= user1.damage[rand1]/2;
-                    user2.damage[rand2]= user2.damage[rand2]*2;
-                }
-                else if (user1.element[rand1]==2 && user2.element[rand2]==0){//User 1 Fire vs User 2 normal
-                    user1.damage[rand1]= user1.damage[rand1]*2;
-                    user2.damage[rand2]= user2.damage[rand2]/2;
-                }
-                else if (user1.element[rand1]==0 && user2.element[rand2]==2){//User 1 normal vs User 2 Fire
-                    user1.damage[rand1]= user1.damage[rand1]/2;
-                    user2.damage[rand2]= user2.damage[rand2]*2;
-                }
-
-
-                //Normal battle logic who was highest damage
-
-
-                if (user1.damage[rand1] > user2.damage[rand2]){
-                    response.append(user1.name).append(" has won the ").append(round).append(". round in a Pure Spell fight.\n");
-                    // Transfer card from user2 to user1
-                    user1.activeDeck.put(user2CardId);
-                    user2.activeDeck.remove(rand2);
-                    user1wins++;
-                }
-                else if (user1.damage[rand1] < user2.damage[rand2]){
-                    response.append(user2.name).append(" has won the ").append(round).append(". round in a Pure Spell fight.\n");
-                    // Transfer card from user1 to user2
-                    user2.activeDeck.put(user1CardId);
-                    user1.activeDeck.remove(rand1);
-                    user2wins++;
-                }
-                else {
-                    response.append("The ").append(round).append(". round ended in a draw.\n");
-                    draws++;
-                }
-            }
-
-            round++;
-        }
-        System.out.println(response.toString());
-
-        // Return the battle results
-        return response.toString();
-    }
-
-
-    static void clearWaitingPlayers() {
-        Connection conn = null;
-        Statement stmt = null;
-
-        try {
-            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
-            stmt = conn.createStatement();
-            String sql = "DELETE FROM WaitingPlayers"; // SQL to clear the table
-
-            stmt.executeUpdate(sql);
-        } catch (SQLException e) {
-            e.printStackTrace(); // Proper error handling should be implemented
-        } finally {
-            // Close resources
-            try {
-                if (stmt != null) stmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-
-    static void addWaitingPlayer(String username) {
-        Connection conn = null;
-        PreparedStatement stmt = null;
-
-        try {
-            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
-            String sql = "INSERT INTO WaitingPlayers (username) VALUES (?)";
-
-            stmt = conn.prepareStatement(sql);
-            stmt.setString(1, username);
-
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            // Close resources
-            try {
-                if (stmt != null) stmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-
-
-
-
-    static String Waitingplayercheck() {
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
-            String sql = "SELECT username FROM WaitingPlayers LIMIT 1"; // Adjust the SQL query as needed
-
-            stmt = conn.prepareStatement(sql);
-            rs = stmt.executeQuery();
-
-            if (rs.next()) {
-                return rs.getString("username"); // Assumes the column name is 'username'
-            } else {
-                return ""; // No waiting players
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return ""; // Return empty string in case of an error
-        } finally {
-            // Close resources
-            try {
-                if (rs != null) rs.close();
-                if (stmt != null) stmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-
-    // Main method or other methods...
-
-
-    static BattleData PrepareBattle(String username) {
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
-            String fetchDeckSql = "SELECT ActiveDeck FROM users WHERE username = ?";
-            stmt = conn.prepareStatement(fetchDeckSql);
-            stmt.setString(1, username);
-            rs = stmt.executeQuery();
-
-            if (!rs.next()) {
-                return null; // Or handle the case where the user is not found
-            }
-
-            String activeDeck = rs.getString("ActiveDeck");
-            JSONArray deckArray = new JSONArray(activeDeck);
-
-            int[] element = new int[deckArray.length()];
-            int[] type = new int[deckArray.length()];
-            int[] monster = new int[deckArray.length()];
-            int[] damage = new int[deckArray.length()];
-
-            String fetchCardInfoSql = "SELECT * FROM cards WHERE id = ?";
-            stmt = conn.prepareStatement(fetchCardInfoSql);
-
-            for (int i = 0; i < deckArray.length(); i++) {
-                String cardId = deckArray.getString(i);
-                stmt.setString(1, cardId);
-                rs = stmt.executeQuery();
-
-                if (rs.next()) {
-                    String cardName = rs.getString("name");
-                    element[i] = Analyzeelement(cardName);
-                    type[i] = Analyzetype(cardName);
-                    damage[i] = rs.getInt("damage");
-
-                    if (type[i] == 0) {
-                        monster[i] = Analyzemonster(cardName);
-                    }
-                }
-            }
-
-            return new BattleData(username,element, type, monster, damage, deckArray);
-
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        } finally {
-            // Close resources
-            try {
-                if (rs != null) rs.close();
-                if (stmt != null) stmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-
-
-    public static int Analyzetype (String input){
-        String[] words = input.split("\\s+");
-        for (String word : words) {
-            if (word.contains("Spell")) {
-                return 1;
-            }
-        }
-        return 0;
-    }
-
-    public static int Analyzeelement(String input) {
-        String[] words = input.split("\\s+");
-        for (String word : words) {
-            if (word.contains("Water")) {
-                return 1;
-            } else if (word.contains("Fire")) {
-                return 2;
-            }
-        }
-        return 0;
-    }
-    public static int Analyzemonster(String input){
-        String[] words = input.split("\\s+");
-        for (String word : words) {
-            if (word.contains("Goblin")) {
-                return 1;
-            } else if (word.contains("Dragon")) {
-                return 2;
-            } else if (word.contains("Wizard")) {
-                return 3;
-            } else if (word.contains("Knight")) {
-                return 4;
-            } else if (word.contains("Kraken")) {
-                return 5;
-            } else if (word.contains("Elve")) {
-                return 6;
-            }
-        }
-        return 0;
-    }
     static String DeckConfiguration(String username, String jsonData) {
         Connection conn = null;
         PreparedStatement stmt = null;
@@ -601,7 +324,7 @@ public class Main {
                     }
 
                     // Join the card information into a single string and return it
-                    return String.join("\n", cardInfoList);
+                    return String.join("\n\n\n\n", cardInfoList);
                 } else {
                     // Handle the case where the active deck is empty
                     System.out.println("Active Deck for user " + username + " is empty.");
@@ -693,175 +416,11 @@ public class Main {
 
 
 
-    static boolean openPackages(String Username){
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
-            //Check the user's coin balance
-            String checkCoinsSql = "SELECT coins FROM users WHERE username = ?";
-            stmt = conn.prepareStatement(checkCoinsSql);
-            stmt.setString(1, Username);
-            rs = stmt.executeQuery();
-            if (!rs.next() || rs.getInt("coins") < 5) {
-                System.out.println("not enough coins");
-                return false; // Not enough coins or user not found
-
-            }
-
-
-            //Select a random package
-            String randomPackageSql = "SELECT * FROM packages LIMIT 1";
-            stmt = conn.prepareStatement(randomPackageSql);
-            rs = stmt.executeQuery();
-            if (!rs.next()) {
-
-                return false; // No package found
-            }
-            //Deduct 5 coins
-            String deductCoinsSql = "UPDATE users SET coins = coins - 5 WHERE username = ?";
-            stmt = conn.prepareStatement(deductCoinsSql);
-            stmt.setString(1, Username);
-            stmt.executeUpdate();
-
-            // Extract card IDs from the package
-            String[] cardIds = new String[5];
-            String selectedPackageId = rs.getString("id");
-            for (int i = 0; i < 5; i++) {
-                cardIds[i] = rs.getString("card" + (i + 1));
-            }
-
-            // Step 2: Determine top 4 damage cards from these 5 cards
-            String topCardsSql = "SELECT id FROM cards WHERE id IN (?, ?, ?, ?, ?) ORDER BY damage DESC LIMIT 5";//Doesn´t need to exist but earlier Misunderstanding
-            stmt = conn.prepareStatement(topCardsSql);
-            for (int i = 0; i < 5; i++) {
-                stmt.setString(i + 1, cardIds[i]);
-            }
-            rs = stmt.executeQuery();
-
-            // Step 3: Add these cards to the user's stack
-            // Assuming there's a table 'user_cards' to hold the user's cards
-            String addToStackSql = "UPDATE users SET Stack = COALESCE(Stack || ',', '') || ? WHERE username = ?";
-            stmt = conn.prepareStatement(addToStackSql);
-            while (rs.next()) {
-                String cardId = rs.getString("id");
-                stmt.setString(1, cardId);
-                stmt.setString(2, Username);
-                stmt.executeUpdate();
-            }
-            String deletePackageSql = "DELETE FROM packages WHERE id = ?";
-            stmt = conn.prepareStatement(deletePackageSql);
-            stmt.setString(1, selectedPackageId);
-            stmt.executeUpdate();
-
-
-            return true; // Operation successful
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false; // Operation failed
-        } finally {
-            // Close resources
-            try {
-                if (rs != null) rs.close();
-                if (stmt != null) stmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-    static boolean PackageCreator(String jsonData) {
-        JSONArray packagesArray = new JSONArray(jsonData);
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        PreparedStatement pstmt2 = null;
-
-        try {
-            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
-            conn.setAutoCommit(false); // Start transaction
-
-            // Prepare statements
-            pstmt = conn.prepareStatement("INSERT INTO cards (id, name, damage, number) VALUES (?, ?, ?, ?)");
-            pstmt2 = conn.prepareStatement("INSERT INTO packages(id, card1, card2, card3, card4, card5) VALUES (?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
-;
-            // Assuming package ID is auto-generated, set it here
-            String packageId = UUID.randomUUID().toString();
-            pstmt2.setString(1, packageId);
-
-            int cardNumber = 1; // Initialize card number counter
-
-            for (int i = 0; i < packagesArray.length(); i++) {
-                JSONObject packageObj = packagesArray.getJSONObject(i);
-                String cardId = packageObj.getString("Id");
-                pstmt2.setString(i + 2, cardId); // Set card references in package
-                pstmt.setString(1, cardId);
-                pstmt.setString(2, packageObj.getString("Name"));
-                pstmt.setDouble(3, packageObj.getDouble("Damage"));
-                pstmt.setInt(4, cardNumber++); // Set card number and increment
-                pstmt.executeUpdate();
-            }
-
-            pstmt2.executeUpdate();
-            conn.commit(); // Commit the transaction
-
-            return true;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            if (conn != null) {
-                try {
-                    conn.rollback(); // Rollback in case of an error
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
-            return false;
-        } finally {
-            // Close resources
-            try {
-                if (pstmt != null) pstmt.close();
-                if (pstmt2 != null) pstmt2.close();
-                if (conn != null) conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 
 
 
 
-    static boolean Registration(String username, String password){
-        try {
-            System.out.println(username +"   "+ password);
-            int coins=20;
-            int [] stack= {};
-            conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
-            String sql = "INSERT INTO \"users\" (username, password, coins) VALUES (?, ?, ?)";
-            stmt = conn.prepareStatement(sql);
-            stmt.setString(1, username);
-            stmt.setString(2, password);
-            stmt.setInt(3, coins);
-            int rowsAffected = stmt.executeUpdate();
-            if (rowsAffected > 0) {
-                System.out.println("User registered successfully!");
-            } else {
-                System.out.println("Error registering user.");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        } finally {
-            try {
-                if (stmt != null) stmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-        return true;
-    }
+
 
 
     static void Menu(){
